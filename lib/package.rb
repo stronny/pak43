@@ -22,7 +22,7 @@ module PaK43
 					dirname = ::File.dirname(filename)
 					dstdir = ('.' === dirname) ? unpack_dir : '%s/%s' % [unpack_dir, dirname]
 					::FileUtils.mkdir_p(dstdir)
-					::FileUtils.cp(commit.gitrepo.filename(filename), dstdir)
+					open('%s/%s' % [unpack_dir, filename], 'w') { |fd| commit.gitrepo.blob(filename, commit.sha) { |buf| fd.write(buf) } }
 				end
 
 				# make the lists and count checksums

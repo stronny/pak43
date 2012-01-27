@@ -1,0 +1,7 @@
+pak43 (1.1) unstable; urgency=high
+
+  * Fixed a serious bug: the files were copied from git's working copy that
+    was always HEAD. Now they are taken from git repository and thus are of
+    appropriate revision.
+
+ -- stronny <stronny@celestia.ru>  Sat, 28 Jan 2012 00:05:00 +0400

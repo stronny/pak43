@@ -6,7 +6,7 @@ require 'package'
 require 'pakdir'
 
 module PaK43
-	VERSION = [1, 0]
+	VERSION = [1, 1]
 	CODENAME = 'airhead'
 	BUFSIZE = 65536
 

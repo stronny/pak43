@@ -5,11 +5,24 @@ module PaK43
 			@path = path
 		end
 
-		def git(args)
-			res = ::Dir.chdir(@path) {`git #{args}`.strip}
+		def git(args, strip = true)
+			res = ::Dir.chdir(@path) {`git #{args}`}
 			raise('git error') unless $?.success?
-			res
+			strip ? res.strip : res
 		end
+
+		def blob(name, revision = '', &block)
+			filename = '%s:%s' % [revision, name]
+			if block_given? then
+				::Dir.chdir(@path) do
+					PaK43.readfile('|git cat-file blob \'%s\'' % filename, &block)
+				end
+			else
+				git('cat-file blob \'%s\'' % filename, false)
+			end
+		end
+
+
 
 		def url
 			git('config --get remote.origin.url')
