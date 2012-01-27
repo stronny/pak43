@@ -1,0 +1,140 @@
+#!/usr/bin/env ruby
+
+# standard lib
+require 'optparse'
+require 'pathname'
+
+# the library
+myself = ::Pathname.new($0).realpath
+libdir = ::File.expand_path('../lib', myself.dirname)
+$:.push(libdir)
+require 'pak43'
+
+# the index
+commands = [:list, :show, :add, :update, :install, :remove, :purge]
+usage = {
+	:list => {:desc => 'List all the packages'},
+	:show => {:args => 'PACKAGE', :desc => 'Detailed information on the package'},
+	:add => {:args => 'NAME URL TARGET', :desc => 'Add a new package and clone its git repo'},
+	:update => {:args => 'PACKAGE', :desc => 'Update the package\'s git repo'},
+	:install => {:args => 'PACKAGE REVISION', :desc => 'Install the package\'s specified revision to the target directory'},
+	:remove => {:args => 'PACKAGE', :desc => 'Uninstall the package'},
+	:purge => {:args => 'PACKAGE', :desc => 'Uninstall the package and delete all its stored data'},
+}
+
+# the commands
+def list(args)
+	if @packages.empty? then
+		puts('No packages under management')
+	else
+		for name, target in @packages do
+			puts('%-20s -> %s' % [name, target])
+		end
+	end
+end
+
+def show(args)
+	package, = *args
+	puts('URL        %s' % package.gitrepo.url)
+	puts('HEAD       %s' % package.gitrepo.head)
+	status = @pakdir.installed_info(package.name)
+	if status.nil? then
+		puts('STATUS     Not installed')
+	else
+		puts('STATUS     Installed commit %s' % status[:commit])
+		if status[:dirs].empty? then
+			puts('CREATED DIRS: None')
+		else
+			puts('CREATED DIRS:')
+			status[:dirs].each { |dir| puts(dir) }
+		end
+		if status[:files].empty? then
+			puts('CREATED FILES: None')
+		else
+			puts('CREATED FILES:')
+			status[:files].each { |file| puts('%s %s' % [file[:sha1], file[:filename]]) }
+		end
+	end
+end
+
+def add(args)
+	name, url, target = *args
+	raise('Package "%s" is already under management' % name) if @packages.include?(name)
+	raise('TARGET "%s" must be an existing directory' % target) unless ::File.directory?(target)
+	@pakdir.add_package(name, url, target)
+end
+
+def update(args)
+	package, = *args
+	package.gitrepo.pull!
+end
+
+def install(args)
+	package, revision = *args
+	commit = package.rev2commit(revision)
+	status = @pakdir.installed_info(package.name)
+	if ! status.nil? then
+		raise('Commit %s already installed' % commit.sha) if status[:commit] === commit.sha
+		remove(package)
+	end
+	package.install(commit)
+end
+
+def remove(args)
+	package, = *args
+	raise('Package not installed') unless @pakdir.installed?(package.name)
+	for e in package.uninstall! do
+		$stderr.puts('REMOVE EXCEPTION: %s' % e.message)
+	end
+end
+
+def purge(args)
+	package, = *args
+	remove(package) if @pakdir.installed?(package.name)
+	@pakdir.drop_package(package.name)
+end
+
+# the command line
+pdpath = File.expand_path('~/.pak43')
+op = OptionParser.new do |op|
+	op.banner = 'Usage: %s [options] command [arguments]' % op.program_name
+	op.separator('Options:')
+	op.on('-d', '--pakdir PATH', 'Use PATH instead of %s for data storage' % pdpath) { |path| pdpath = path }
+	op.on('-h', '--help', 'Show this help and exit') { puts(op); exit }
+	op.on('-v', '--version', 'Show the program version and exit') { puts('%s version %s (%s)' % [op.program_name, PaK43::VERSION.join('.'), PaK43::CODENAME]); exit }
+	op.separator('Commands:')
+	for cmd in commands do
+		op.separator('    %-32s %s' % [[cmd, usage[cmd][:args]].join(' ').strip, usage[cmd][:desc]])
+	end
+end
+
+# Let's get dangerous!
+begin
+	args = op.parse!
+rescue SystemExit
+	raise
+rescue Exception
+	abort('Failed to parse the command line, %s (try --help)' % $!.message)
+end
+abort('Do NOT ever ever run me as root!') unless ::Process.uid > 0
+
+@pakdir = PaK43::Pakdir.new(pdpath)
+@packages = @pakdir.packages
+
+cmd = (args.shift.to_sym rescue nil)
+abort('No command given (try --help)') if cmd.nil?
+abort('Unknown command "%s" (try --help)' % cmd) unless commands.include?(cmd)
+if usage[cmd][:args] then
+	abort('"%s" command requires more arguments (try --help)' % cmd) unless args.count >= usage[cmd][:args].split.count
+	if usage[cmd][:args].include?('PACKAGE') then
+		id = usage[cmd][:args].index('PACKAGE')
+		abort('"%s" package is not under management (try list)' % args[id]) unless @packages.include?(args[id])
+		args[id] = @pakdir.package(args[id])
+	end
+end
+
+begin
+	send(cmd, args)
+rescue Exception
+	abort('%s: %s' % [cmd, $!.message])
+end

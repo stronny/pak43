@@ -1,0 +1,13 @@
+PaK43
+-----
+The git-based package manager for publishing static sites.
+
+All the fancy stuff is planned for future versions. All it can do now
+is clone some git repo and copy all the files to a specified location.
+It keeps track of the files and dirs though so you can easily remove
+the copied files and publish another revision. More to come!
+
+http://github.com/stronny/pak43
+
+Author: stronny <stronny@celestia.ru>
+License: this software is public domain.
